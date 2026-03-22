@@ -1,0 +1,42 @@
+# System files
+Thumbs.db
+.DS_Store
+
+# Python
+venv/
+ENV/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+*.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints
+
+# Env files
+.env
+.env.local
+.env.*
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.cache/
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/npm-debug.log
+
+# Backend artifacts
+backend/venv/
+backend/__pycache__/
+backend/*.py[cod]
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store

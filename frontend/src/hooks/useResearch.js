@@ -1,4 +1,4 @@
-# FILE: hooks/useResearch.js
+ 
 // Custom React hook for managing research chat state and API communication
 
 import { useState, useCallback } from 'react';

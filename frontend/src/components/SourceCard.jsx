@@ -1,6 +1,4 @@
-# FILE: components/SourceCard.jsx
 // Component for displaying source links in a horizontal scrollable row
-
 import React from 'react';
 
 /**

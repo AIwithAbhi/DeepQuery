@@ -1,4 +1,3 @@
-# FILE: components/MessageBubble.jsx
 // Component for rendering individual chat messages with markdown support
 
 import React from 'react';

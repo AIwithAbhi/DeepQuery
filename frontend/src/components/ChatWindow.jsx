@@ -1,6 +1,4 @@
-# FILE: components/ChatWindow.jsx
 // Main chat display component with auto-scroll and empty state
-
 import React, { useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 

@@ -1,4 +1,3 @@
-# FILE: App.jsx
 // Main application component - Layout and state management
 
 import React from 'react';

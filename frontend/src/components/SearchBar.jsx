@@ -1,6 +1,4 @@
-# FILE: components/SearchBar.jsx
 // Component for the chat input with send button
-
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
 
@@ -19,7 +17,7 @@ import { Send } from 'lucide-react';
  */
 function SearchBar({ onSubmit, isLoading }) {
   const [inputValue, setInputValue] = useState('');
-
+  
   /**
    * Handle form submission
    * @param {Event} e - Form submit event
