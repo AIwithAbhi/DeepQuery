@@ -6,3 +6,4 @@ beautifulsoup4
 python-dotenv
 sse-starlette
 pydantic
+tavily-python

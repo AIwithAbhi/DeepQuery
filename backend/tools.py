@@ -1,19 +1,23 @@
 # FILE: tools.py
-# Async tool implementations for web search and page scraping
+# Async tool implementations for web search using Tavily
 
 import os
 import httpx
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from tavily import TavilyClient
 
 load_dotenv()
 
-BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "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")
+
+# Initialize Tavily client
+tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 
 async def brave_search(query: str, count: int = 5) -> list[dict]:
     """
-    Search the web using Brave Search API.
+    Search the web using Tavily Search API.
 
     Args:
         query: The search query string
@@ -23,36 +27,28 @@ async def brave_search(query: str, count: int = 5) -> list[dict]:
         List of dicts with title, url, and snippet for each result
     """
     try:
-        headers = {
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip",
-            "X-Subscription-Token": BRAVE_API_KEY,
-        }
-        params = {"q": query, "count": count}
+        # Tavily is synchronous, run in executor
+        import asyncio
+        response = await asyncio.to_thread(
+            tavily_client.search,
+            query=query,
+            search_depth="advanced",
+            max_results=count,
+            include_answer=False
+        )
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                "https://api.search.brave.com/res/v1/web/search",
-                headers=headers,
-                params=params,
-            )
-            response.raise_for_status()
-            data = response.json()
+        results = []
+        for item in response.get("results", []):
+            results.append({
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "snippet": item.get("content", "")[:500],  # Tavily provides full content, truncate for snippet
+            })
 
-            results = []
-            for item in data.get("web", {}).get("results", []):
-                results.append(
-                    {
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "snippet": item.get("description", ""),
-                    }
-                )
-
-            return results
+        return results
 
     except Exception as e:
-        print(f"Error in brave_search: {e}")
+        print(f"Error in tavily_search: {e}")
         return []
 
 

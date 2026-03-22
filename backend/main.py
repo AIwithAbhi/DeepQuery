@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from typing import Optional
 
 from models import ResearchRequest, SessionResponse, SessionListResponse
+from pydantic import BaseModel
 from agent import run_agent
 from database import (
     create_session,
@@ -88,6 +89,44 @@ async def research(request: ResearchRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class CloseSessionRequest(BaseModel):
+    """Model for closing a session request."""
+    messages: list = []
+    query: str = ""
+
+
+@app.post("/sessions/{session_id}/close")
+async def close_session_endpoint(session_id: int, request: CloseSessionRequest):
+    """
+    Close/save a session manually with full conversation data.
+
+    This endpoint allows users to explicitly save and close a session,
+    storing all messages and conversation context to the database.
+    """
+    # Check if session exists
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        # Compile full conversation as response
+        if request.messages:
+            conversation_text = json.dumps(request.messages, indent=2)
+        else:
+            conversation_text = session.get("response", "")
+
+        # Update session with closed status
+        update_session(session_id, conversation_text, "closed")
+
+        return {
+            "message": "Session closed and saved successfully",
+            "session_id": session_id,
+            "status": "closed"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error closing session: {str(e)}")
 
 
 @app.get("/sessions", response_model=SessionListResponse)
