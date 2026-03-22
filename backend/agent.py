@@ -79,13 +79,12 @@ async def call_nvidia_api(messages: list, tools: list, stream: bool = False) -> 
     payload = {
         "model": MODEL_NAME,
         "messages": messages,
-        "max_tokens": 16384,
+        "max_tokens": 4096,
         "temperature": 0.7,
         "top_p": 1.0,
         "stream": stream,
         "tools": tools,
         "tool_choice": "auto",
-        "chat_template_kwargs": {"thinking": True},
     }
 
     async with httpx.AsyncClient(timeout=60.0) as client:
