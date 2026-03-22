@@ -1,11 +1,11 @@
 # FILE: agent.py
-# Core agent logic implementing the research loop with Claude/Kimi via OpenRouter
+# Core agent logic implementing the research loop with Kimi via NVIDIA API
 
 import os
 import json
 import asyncio
 from typing import AsyncGenerator
-from anthropic import AsyncAnthropic
+import httpx
 from dotenv import load_dotenv
 
 from prompts import SYSTEM_PROMPT
@@ -13,47 +13,89 @@ from tools import brave_search, scrape_page
 
 load_dotenv()
 
-# Configure Anthropic client for OpenRouter
-client = AsyncAnthropic(
-    api_key=os.getenv("ANTHROPIC_API_KEY"),
-    base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-)
-
-# Model name for Kimi K2.5 via OpenRouter
+# NVIDIA API Configuration
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MODEL_NAME = "moonshotai/kimi-k2.5"
 
 
 def get_tools_list():
-    """Returns the list of available tools in Anthropic tool_use format."""
+    """Returns the list of available tools in OpenAI-compatible format."""
     return [
         {
-            "name": "brave_search",
-            "description": "Search the web using Brave Search API",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The search query"},
-                    "count": {
-                        "type": "integer",
-                        "description": "Number of results to return (default 5)",
-                        "default": 5,
+            "type": "function",
+            "function": {
+                "name": "brave_search",
+                "description": "Search the web using Brave Search API",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The search query"},
+                        "count": {
+                            "type": "integer",
+                            "description": "Number of results to return (default 5)",
+                            "default": 5,
+                        },
                     },
+                    "required": ["query"],
                 },
-                "required": ["query"],
             },
         },
         {
-            "name": "scrape_page",
-            "description": "Fetch and extract clean text from a web page URL",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "The URL to scrape"}
+            "type": "function",
+            "function": {
+                "name": "scrape_page",
+                "description": "Fetch and extract clean text from a web page URL",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "The URL to scrape"}
+                    },
+                    "required": ["url"],
                 },
-                "required": ["url"],
             },
         },
     ]
+
+
+async def call_nvidia_api(messages: list, tools: list, stream: bool = False) -> dict:
+    """
+    Call NVIDIA API for chat completions.
+
+    Args:
+        messages: List of message dicts with role and content
+        tools: List of available tools
+        stream: Whether to stream the response
+
+    Returns:
+        API response as dict
+    """
+    headers = {
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": messages,
+        "max_tokens": 16384,
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "stream": stream,
+        "tools": tools,
+        "tool_choice": "auto",
+        "chat_template_kwargs": {"thinking": True},
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{NVIDIA_BASE_URL}/chat/completions",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
 
 
 async def run_agent(query: str) -> AsyncGenerator[str, None]:
@@ -61,7 +103,7 @@ async def run_agent(query: str) -> AsyncGenerator[str, None]:
     Run the research agent with the given query.
 
     Implements an agentic loop that:
-    1. Sends query to Claude/Kimi with available tools
+    1. Sends query to Kimi via NVIDIA API with available tools
     2. Handles tool calls (search, scrape)
     3. Streams back status updates and final response
 
@@ -73,39 +115,31 @@ async def run_agent(query: str) -> AsyncGenerator[str, None]:
     """
     try:
         tools_list = get_tools_list()
-        messages = [{"role": "user", "content": query}]
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": query},
+        ]
         max_iterations = 10
 
         for iteration in range(max_iterations):
-            # Call the model
-            response = await client.messages.create(
-                model=MODEL_NAME,
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                tools=tools_list,
-                messages=messages,
-                stream=False,
-            )
+            # Call the model via NVIDIA API
+            response = await call_nvidia_api(messages, tools_list)
 
-            if response.stop_reason == "tool_use":
-                # Extract tool use blocks
-                tool_use_blocks = []
-                text_content = ""
+            choice = response.get("choices", [{}])[0]
+            message = choice.get("message", {})
+            finish_reason = choice.get("finish_reason", "")
+            tool_calls = message.get("tool_calls", [])
 
-                for block in response.content:
-                    if block.type == "tool_use":
-                        tool_use_blocks.append(block)
-                    elif block.type == "text":
-                        text_content += block.text
-
-                # Add assistant message to history
-                messages.append({"role": "assistant", "content": response.content})
+            if tool_calls and finish_reason == "tool_calls":
+                # Add assistant message with tool calls
+                messages.append(message)
 
                 # Execute each tool call
-                for tool_block in tool_use_blocks:
-                    tool_name = tool_block.name
-                    tool_inputs = tool_block.input
-                    tool_use_id = tool_block.id
+                for tool_call in tool_calls:
+                    function = tool_call.get("function", {})
+                    tool_name = function.get("name", "")
+                    tool_inputs = json.loads(function.get("arguments", "{}"))
+                    tool_call_id = tool_call.get("id", "")
 
                     # Yield status update
                     search_target = tool_inputs.get("query") or tool_inputs.get(
@@ -132,26 +166,18 @@ async def run_agent(query: str) -> AsyncGenerator[str, None]:
                     # Add tool result to messages
                     messages.append(
                         {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": tool_use_id,
-                                    "content": json.dumps(result),
-                                }
-                            ],
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": json.dumps(result),
                         }
                     )
 
                 # Continue to next iteration
                 continue
 
-            elif response.stop_reason == "end_turn":
+            elif finish_reason == "stop":
                 # Extract the final text response
-                final_text = ""
-                for block in response.content:
-                    if block.type == "text":
-                        final_text += block.text
+                final_text = message.get("content", "")
 
                 # Stream the response word by word
                 words = final_text.split(" ")
@@ -168,7 +194,7 @@ async def run_agent(query: str) -> AsyncGenerator[str, None]:
                 # Unexpected stop reason
                 error_msg = {
                     "type": "error",
-                    "text": f"Unexpected stop reason: {response.stop_reason}",
+                    "text": f"Unexpected finish reason: {finish_reason}",
                 }
                 yield f"data: {json.dumps(error_msg)}\n\n"
                 break

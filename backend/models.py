@@ -3,6 +3,7 @@
 
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 
 
 class ResearchRequest(BaseModel):
@@ -25,3 +26,50 @@ class AgentMessage(BaseModel):
     role: str
     content: str
     sources: Optional[List[SearchResult]] = None
+
+
+class SessionInfo(BaseModel):
+    """Model for session summary (without full response)."""
+
+    id: int
+    query: str
+    status: str
+    created_at: str
+    updated_at: Optional[str] = None
+
+
+class SessionSearchResult(BaseModel):
+    """Model for search results stored in a session."""
+
+    id: int
+    query: str
+    results: List[dict]
+    created_at: str
+
+
+class SessionScrapedPage(BaseModel):
+    """Model for scraped pages stored in a session."""
+
+    id: int
+    url: str
+    content: str
+    created_at: str
+
+
+class SessionResponse(BaseModel):
+    """Model for full session details response."""
+
+    id: int
+    query: str
+    response: Optional[str] = None
+    status: str
+    created_at: str
+    updated_at: Optional[str] = None
+    search_results: List[SessionSearchResult] = []
+    scraped_pages: List[SessionScrapedPage] = []
+
+
+class SessionListResponse(BaseModel):
+    """Model for list of sessions response."""
+
+    sessions: List[SessionInfo]

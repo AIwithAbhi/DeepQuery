@@ -1,8 +1,8 @@
 # FILE: requirements.txt
 fastapi
 uvicorn[standard]
-anthropic
 httpx
 beautifulsoup4
 python-dotenv
 sse-starlette
+pydantic
